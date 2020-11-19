@@ -62,7 +62,7 @@ def ResolveDice(BonusDie, PenaltyDie, Threshold):
     if CombinedResult == 1:
       ret.title = "Critical Success!"
       ret.colour = COL_CRIT_SUCCESS
-    elif CombinedResult =< 5 and Threshold > 50:
+    elif CombinedResult <= 5 and Threshold > 50:
       ret.title = "Critical Success!"
       ret.colour = COL_CRIT_SUCCESS
     elif CombinedResult == 100:
