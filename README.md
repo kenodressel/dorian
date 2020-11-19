@@ -32,6 +32,19 @@ Examples:
     Failure: 0/50/70 + 4 = 74
 ```
 
+## Docker build
+
+Use docker to build an image of this bot
+
+```
+docker build . -t dorian
+```
+
+and run it on your local / remote machine:
+```
+docker run -e DORIAN_TOKEN=YOUR_DISCORD_BOT_KEY dorian 
+```
+
 ## Notes
 
 Needs environmental variable DORIAN_TOKEN to be set if you want to run this yourself. See `set_env.sh.example` for a Linux/OSX method.
