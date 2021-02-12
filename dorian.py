@@ -6,7 +6,6 @@ import asyncio
 from os import environ
 from random import randint
 import operator
-import pickle
 import json
 
 logging.basicConfig(level=logging.INFO)
