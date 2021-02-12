@@ -6,6 +6,8 @@ import asyncio
 from os import environ
 from random import randint
 import operator
+import pickle
+import json
 
 logging.basicConfig(level=logging.INFO)
 
@@ -13,6 +15,7 @@ client = discord.Client()
 discord.opus.load_opus
 roll_command = "!croll"
 vote_command = "!cvote"
+stats_command = "!cstats"
 
 FirstConnect = True
 LastPlayingIndex = -1
@@ -270,6 +273,29 @@ async def cycle_playing():
     await asyncio.sleep(randint(60, 600))
 
 
+def update_stats(result, user):
+    try:
+        with open('data/stats_' + user.replace('#', '_') + '.json', 'r') as json_file:
+            user_stats = json.load(json_file)
+    except FileNotFoundError:
+        user_stats = empty_vote.copy()
+
+    user_stats[result.short] += 1
+
+    with open('data/stats_' + user.replace('#', '_') + '.json', 'w') as outfile:
+        json.dump(user_stats, outfile)
+
+
+def get_stats(user=None):
+    try:
+        with open('data/stats_' + user.replace('#', '_') + '.json', 'r') as json_file:
+            user_stats = json.load(json_file)
+    except FileNotFoundError:
+        user_stats = empty_vote.copy()
+
+    return json.dumps(user_stats, indent=4)
+
+
 @client.event
 async def on_ready():
     global FirstConnect
@@ -288,8 +314,10 @@ async def on_message(message):
     if environ['CHANNEL_NAME'] and message.guild and message.channel.name != environ['CHANNEL_NAME']:
         return
 
+    author = str(message.author).replace(' ', '')
+
     if message.content.startswith(roll_command):
-        result = parse_roll(message.content[len(roll_command) + 1:], str(message.author))
+        result = parse_roll(message.content[len(roll_command) + 1:], author)
         if isinstance(result, str):
             await message.channel.send(result)
         else:
@@ -297,8 +325,12 @@ async def on_message(message):
             em.set_footer(text=result.desc)
             em.set_image(url=result.image)
             em.description = None
+            update_stats(result, author)
             await message.channel.send(message.author.mention, embed=em)
-            # await message.channel.send()
+
+    if message.content.startswith(stats_command):
+        result = get_stats(author)
+        await message.channel.send(result)
 
     if message.content.startswith(vote_command) and not message.guild:
         result = parse_vote(message.content[len(vote_command) + 1:])
