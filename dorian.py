@@ -11,7 +11,7 @@ import json
 logging.basicConfig(level=logging.INFO)
 
 client = discord.Client()
-discord.opus.load_opus
+
 roll_command = "!croll"
 vote_command = "!cvote"
 stats_command = "!cstats"
