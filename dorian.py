@@ -239,7 +239,7 @@ Examples:
     return roll_the_dice(bonus_die, penalty_die, threshold, author)
 
 
-def parse_vote(vote_string):
+def parse_vote(vote_string, author):
     fail = "Use !cvote user cs|es|hs|s|f|cf"
 
     vote_regex = re.search('^(\w+#\d+)\s(\w+)$', vote_string)
@@ -251,6 +251,10 @@ def parse_vote(vote_string):
         return fail
 
     user = vote_groups[0]
+
+    if user == author:
+        return "you can't vote for yourself"
+
     vote = vote_groups[1]
     if user not in votes:
         votes[user] = empty_vote.copy()
@@ -332,7 +336,7 @@ async def on_message(message):
         await message.channel.send(result)
 
     if message.content.startswith(vote_command) and not message.guild:
-        result = parse_vote(message.content[len(vote_command) + 1:])
+        result = parse_vote(message.content[len(vote_command) + 1:], author)
         if isinstance(result, str):
             await message.channel.send(result)
 
