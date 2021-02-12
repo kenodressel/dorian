@@ -222,7 +222,11 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    print(message)
     if message.author == client.user:
+        return
+
+    if environ['CHANNEL_NAME'] and message.channel.name != environ['CHANNEL_NAME']:
         return
 
     if message.content.startswith(roll_command):
