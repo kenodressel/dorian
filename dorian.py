@@ -5,18 +5,30 @@ import logging
 import asyncio
 from os import environ
 from random import randint
+import operator
 
 logging.basicConfig(level=logging.INFO)
 
 client = discord.Client()
 discord.opus.load_opus
 roll_command = "!croll"
+vote_command = "!cvote"
 
 FirstConnect = True
 LastPlayingIndex = -1
 PlayingQuotes = {
     1: "with dice",
     2: "second item"
+}
+
+votes = {}
+empty_vote = {
+    's': 0,
+    'f': 0,
+    'hs': 0,
+    'es': 0,
+    'cf': 0,
+    'cs': 0,
 }
 
 COL_CRIT_SUCCESS = 0xFFFFFF
@@ -33,73 +45,98 @@ class DiceResult:
         self.desc = ""
         self.colour = COL_NORM_SUCCESS
         self.image = ""
+        self.short = ""
 
 
-def RollDie(min=1, max=10):
+def roll_die(min=1, max=10):
     result = randint(min, max)
     return result
 
 
-def ResolveDice(BonusDie, PenaltyDie, Threshold):
-    TenResultPool = []
-    TenResultPool.append(RollDie(0, 9))
+def roll_the_dice(bonus_die, penalty_die, threshold, author=None):
+    if author and author in votes:
+        # any above 0?
+        sum_votes = sum(votes[author].values())
+        if sum_votes == 0:
+            return resolve_die(bonus_die, penalty_die, threshold)
 
-    TenResult = min(TenResultPool)
-    OneResult = RollDie()
+        # force next roll
+        next_roll = max(votes[author].items(), key=operator.itemgetter(1))[0]
+        result = resolve_die(bonus_die, penalty_die, threshold)
+        while result.short != next_roll:
+            result = resolve_die(bonus_die, penalty_die, threshold)
+        votes[author] = empty_vote.copy()
+        return result
+    return resolve_die(bonus_die, penalty_die, threshold)
 
-    if BonusDie > 0 and PenaltyDie > 0:
+
+def resolve_die(bonus_die, penalty_die, threshold):
+    ten_result_pool = [roll_die(0, 9)]
+
+    ten_result = min(ten_result_pool)
+    one_result = roll_die()
+
+    if bonus_die > 0 and penalty_die > 0:
         return "Can't chain bonus and penalty dice"
 
-    for i in range(BonusDie):
-        TenResultPool.append(RollDie(0, 9))
-        TenResult = min(TenResultPool)
+    for i in range(bonus_die):
+        ten_result_pool.append(roll_die(0, 9))
+        ten_result = min(ten_result_pool)
 
-    for i in range(PenaltyDie):
-        TenResultPool.append(RollDie(0, 9))
-        TenResult = max(TenResultPool)
+    for i in range(penalty_die):
+        ten_result_pool.append(roll_die(0, 9))
+        ten_result = max(ten_result_pool)
 
-    CombinedResult = (TenResult * 10) + OneResult
+    combined_result = (ten_result * 10) + one_result
 
-    if BonusDie > 0 or PenaltyDie > 0:
-        desc = '(' + '|'.join([str(i * 10) for i in TenResultPool]) + ') ' + str(TenResult * 10) + ' + ' + str(
-            OneResult) + ' = ' + str(CombinedResult)
+    if bonus_die > 0 or penalty_die > 0:
+        desc = '(' + '|'.join([str(i * 10) for i in ten_result_pool]) + ') ' + str(ten_result * 10) + ' + ' + str(
+            one_result) + ' = ' + str(combined_result)
     else:
-        desc = str(TenResult * 10) + ' + ' + str(OneResult) + ' = ' + str(CombinedResult)
+        desc = str(ten_result * 10) + ' + ' + str(one_result) + ' = ' + str(combined_result)
 
-    if Threshold:
+    if threshold:
         ret = DiceResult()
-        if CombinedResult == 1:
+        if combined_result == 1:
             ret.title = "Critical Success!"
             ret.colour = COL_CRIT_SUCCESS
             ret.image = "https://cdn.discordapp.com/attachments/778900221199253505/779042867138134066/nat20Smaller.png"
-        elif CombinedResult <= 5 and Threshold > 50:
+            ret.short = "cs"
+        elif combined_result <= 5 and threshold > 50:
             ret.title = "Critical Success!"
             ret.colour = COL_CRIT_SUCCESS
             ret.image = "https://cdn.discordapp.com/attachments/778900221199253505/779042867138134066/nat20Smaller.png"
-        elif CombinedResult == 100:
+            ret.short = "cs"
+        elif combined_result == 100:
             ret.title = "Critical Failure!"
             ret.colour = COL_CRIT_FAILURE
             ret.image = "https://cdn.discordapp.com/attachments/778900221199253505/779042861928022047/nat1smaller.png"
-        elif CombinedResult > 95 and Threshold <= 50:
+            ret.short = "f"
+        elif combined_result > 95 and threshold <= 50:
             ret.title = "Critical Failure!"
             ret.colour = COL_CRIT_FAILURE
             ret.image = "https://cdn.discordapp.com/attachments/778900221199253505/779042861928022047/nat1smaller.png"
-        elif CombinedResult <= Threshold / 5:
+            ret.short = "cf"
+        elif combined_result <= threshold / 5:
             ret.title = "Extreme Success!"
             ret.colour = COL_EXTR_SUCCESS
             ret.image = "https://cdn.discordapp.com/attachments/778900221199253505/779041383959756860/yaythulhuSmaller.png"
-        elif CombinedResult <= Threshold / 2:
+            ret.short = "es"
+        elif combined_result <= threshold / 2:
             ret.title = "Hard Success!"
             ret.colour = COL_HARD_SUCCESS
             ret.image = "https://cdn.discordapp.com/attachments/778900221199253505/779041377534869533/babythulhuSmaller.png"
-        elif CombinedResult <= Threshold:
+            ret.short = "hs"
+        elif combined_result <= threshold:
             ret.title = "Success!"
             ret.colour = COL_NORM_SUCCESS
             ret.image = "https://cdn.discordapp.com/attachments/778900221199253505/779043134020780062/cutethulhuSmaller.png"
+            ret.short = "s"
         else:
             ret.title = "Failure"
             ret.colour = COL_NORM_FAILURE
             ret.image = "https://cdn.discordapp.com/attachments/778900221199253505/779043270948421662/deniedSmaller.png"
+            ret.short = "f"
 
         # ret.title = ret.title + str(CombinedResult)
         ret.desc = desc
@@ -109,7 +146,7 @@ def ResolveDice(BonusDie, PenaltyDie, Threshold):
         return ret
 
 
-def parseRoll(diceString):
+def parse_roll(dice_string, author=None):
     fail = """
 Unable to parse dice command. Usage:
 ```
@@ -118,7 +155,7 @@ Unable to parse dice command. Usage:
 Die Types:
     b: Bonus dice (can't be chained with Penalty)
     p: Penalty dice (can't be chained with Bonus)
-    t: Threshold to determine success/fail. Score is required if a threshold is set.
+    t: threshold to determine success/fail. Score is required if a threshold is set.
 
 Examples:
     !croll
@@ -137,17 +174,17 @@ Examples:
 
     # check for the case where ppl forget to write t
     # handle case where there is no bpt
-    if diceString.isnumeric():
-        return ResolveDice(0, 0, int(diceString))
+    if dice_string.isnumeric():
+        return roll_the_dice(0, 0, int(dice_string), author)
 
-    dice = [x for x in re.split('([bpt](?:\d+)?)', diceString) if x]
+    dice = [x for x in re.split('([bpt](?:\d+)?)', dice_string) if x]
 
-    if len(dice) > 1 and 'b' in diceString and 'p' in diceString:
+    if len(dice) > 1 and 'b' in dice_string and 'p' in dice_string:
         return "Can't chain bonus and penalty dice"
 
-    BonusDie = 0
-    PenaltyDie = 0
-    Threshold = False
+    bonus_die = 0
+    penalty_die = 0
+    threshold = False
 
     for die in dice:
 
@@ -179,28 +216,51 @@ Examples:
             num = 1
 
         # get die code (b p t)
-        dieCode = die_groups[0]
+        die_code = die_groups[0]
 
         # too long of a dice code?
-        if len(dieCode) > 1:
+        if len(die_code) > 1:
             return fail
 
-        if dieCode == 'b':
-            BonusDie = num
+        if die_code == 'b':
+            bonus_die = num
 
-        if dieCode == 'p':
-            PenaltyDie = num
+        if die_code == 'p':
+            penalty_die = num
 
-        if dieCode == 't':
+        if die_code == 't':
             if default_num:
-                return "Threshold requires a value!"
+                return "threshold requires a value!"
             else:
-                Threshold = num
+                threshold = num
 
-    return ResolveDice(BonusDie, PenaltyDie, Threshold)
+    return roll_the_dice(bonus_die, penalty_die, threshold, author)
 
 
-async def cyclePlaying():
+def parse_vote(vote_string):
+    fail = "Use !cvote user cs|es|hs|s|f|cf"
+
+    vote_regex = re.search('^(\w+#\d+)\s(\w+)$', vote_string)
+    if not vote_regex:
+        return fail
+
+    vote_groups = vote_regex.groups()
+    if not vote_groups:
+        return fail
+
+    user = vote_groups[0]
+    vote = vote_groups[1]
+    if user not in votes:
+        votes[user] = empty_vote.copy()
+
+    if vote not in votes[user]:
+        return fail
+
+    votes[user][vote] += 1
+    return "vote accepted"
+
+
+async def cycle_playing():
     global LastPlayingIndex
     playing = PlayingQuotes[randint(1, len(PlayingQuotes))]
     while playing == LastPlayingIndex:
@@ -222,15 +282,14 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-
     if message.author == client.user:
         return
 
-    if environ['CHANNEL_NAME'] and message.channel.name != environ['CHANNEL_NAME']:
+    if environ['CHANNEL_NAME'] and message.guild and message.channel.name != environ['CHANNEL_NAME']:
         return
 
     if message.content.startswith(roll_command):
-        result = parseRoll(message.content[len(roll_command) + 1:])
+        result = parse_roll(message.content[len(roll_command) + 1:], str(message.author))
         if isinstance(result, str):
             await message.channel.send(result)
         else:
@@ -240,6 +299,11 @@ async def on_message(message):
             em.description = None
             await message.channel.send(message.author.mention, embed=em)
             # await message.channel.send()
+
+    if message.content.startswith(vote_command) and not message.guild:
+        result = parse_vote(message.content[len(vote_command) + 1:])
+        if isinstance(result, str):
+            await message.channel.send(result)
 
 
 token = environ['DORIAN_TOKEN']
