@@ -336,9 +336,13 @@ async def on_message(message):
         await message.channel.send(result)
 
     if message.content.startswith(vote_command) and not message.guild:
-        result = parse_vote(message.content[len(vote_command) + 1:], author)
-        if isinstance(result, str):
-            await message.channel.send(result)
+        if environ['VOTE_ALLOWED'] and environ['VOTE_ALLOWED'] == "true":
+            result = parse_vote(message.content[len(vote_command) + 1:], author)
+            if isinstance(result, str):
+                await message.channel.send(result)
+        else:
+            await message.channel.send("voting is disabled you filthy cheater")
+
 
 
 token = environ['DORIAN_TOKEN']
